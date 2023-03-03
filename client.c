@@ -1,25 +1,132 @@
 #include "udpsh_sock.h"
+#include "udpsh_server.h"
 #include <stdio.h>
 #include <string.h>
+#include <arpa/inet.h> /* inet_ntoa */
+
+#define STR_CON ".connect"
+#define STR_QUIT ".quit"
+#define STR_HELP ".help"
+#define STR_DISCON ".disconnect"
+
+struct udpsh_sock sock_server;
+
+void serverack()
+{
+    printf("waiting for server ack... ");
+    fflush(stdout);
+    udpsh_sock_recv(&sock_server, NULL, NULL);
+    if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_ACK, strlen(UDPSH_SERVER_FUN_ACK)) == 0)
+    {
+        printf("done\n");
+    }
+}
+
+void shellhelp()
+{
+    printf("help here...\n");
+}
 
 int main()
 {
-    struct udpsh_sock sock_server;
-    memset(&sock_server, 0, sizeof(sock_server));
-    char inputbuf[UDPSH_SOCK_BUFSZ];
+    int sessionid = UDPSH_SERVER_SES_INV;
+    // we want half the size to avoid snprintf truncation warnings
+    char inputbuf[UDPSH_SOCK_BUFSZ / 2];
     int running = 1;
-    udpsh_sock_make("127.0.0.1", &sock_server);
 
+    memset(&sock_server, 0, sizeof(sock_server));
+
+    printf("welcome to udpsh! type " STR_HELP " for help\n");
     while(running)
     {
-        printf("enter msg\n");
-        fgets(inputbuf, UDPSH_SOCK_BUFSZ, stdin);
-        strncpy(sock_server.buffer, inputbuf, UDPSH_SOCK_BUFSZ);
-        udpsh_sock_send(&sock_server);
-        printf("waiting for ack\n");
-        udpsh_sock_recv(&sock_server, NULL, NULL);
-        printf("ack received\n");
+        if(sessionid == UDPSH_SERVER_SES_INV)
+            printf("\n> ");
+        else
+            printf("\n$ ");
+
+        fgets(inputbuf, sizeof(inputbuf), stdin);
+
+        if(strncmp(inputbuf,STR_QUIT, strlen(STR_QUIT)) == 0)
+        {
+            sessionid = UDPSH_SERVER_SES_INV;
+            running = 0;
+        }else if(strncmp(inputbuf,STR_HELP, strlen(STR_HELP)) == 0)
+        {
+            shellhelp();
+        }else if(strncmp(inputbuf,STR_DISCON, strlen(STR_DISCON)) == 0)
+        {
+            if(sessionid == UDPSH_SERVER_SES_INV)
+            {
+                printf("not connected to server!\n");
+                continue;
+            }else
+            {
+                snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
+                         "%s%s%d",
+                         UDPSH_SERVER_FUN_DIS, UDPSH_SERVER_TOK,
+                         sessionid);
+                udpsh_sock_send(&sock_server);
+                serverack();
+                sessionid = UDPSH_SERVER_SES_INV;
+            }
+        }else if(strncmp(inputbuf,STR_CON, strlen(STR_CON)) == 0)
+        {
+            if(sessionid != UDPSH_SERVER_SES_INV)
+            {
+                printf("already connected to %s\n",
+                       inet_ntoa(sock_server.addr.sin_addr));
+                continue;
+            }
+
+            const char* conaddr = inputbuf + strlen(STR_CON) + 1; //+1 space
+            if(udpsh_sock_make(conaddr, &sock_server) != 0)
+            {
+                printf("cannot create socket to server at %s\n", conaddr);
+                continue;
+            }
+            snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
+                "%s", UDPSH_SERVER_FUN_CON);
+            udpsh_sock_send(&sock_server);
+            serverack();
+            printf("waiting for server to reply with sessionid... ");
+            fflush(stdout);
+            //server should reply with our sessionid here
+            udpsh_sock_recv(&sock_server, NULL, NULL);
+            sscanf(sock_server.buffer, "%d", &sessionid);
+            if(sessionid == UDPSH_SERVER_SES_INV)
+            {
+                udpsh_sock_recv(&sock_server, NULL, NULL);
+                printf("unable to connect. server says it's because: %s\n",
+                       sock_server.buffer);
+            }else
+            {
+                printf("connected to %s using sessionid %d!\n",
+                       inet_ntoa(sock_server.addr.sin_addr), sessionid);
+            }
+        }else
+        {
+            if(sessionid == UDPSH_SERVER_SES_INV)
+            {
+                printf("unknown udpsh command. type " STR_HELP " for help\n");
+            }else
+            {
+                snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
+                         "%s%s%d%s%s",
+                         UDPSH_SERVER_FUN_EXE, UDPSH_SERVER_TOK,
+                         sessionid, UDPSH_SERVER_TOK,
+                         inputbuf);
+                udpsh_sock_send(&sock_server);
+                serverack();
+
+                //server should reply with command output
+                printf("waiting for output from server... ");
+                udpsh_sock_recv(&sock_server, NULL, NULL);
+                printf("done\n");
+                printf("%s", sock_server.buffer);
+            }
+        }
     }
+    printf("have a nice day!\n");
 
     return 0;
 }
