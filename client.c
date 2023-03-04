@@ -1,8 +1,9 @@
-#include "udpsh_sock.h"
-#include "udpsh_server.h"
 #include <stdio.h>
 #include <string.h>
 #include <arpa/inet.h> /* inet_ntoa */
+
+#include "udpsh_sock.h"
+#include "udpsh_server.h"
 
 #define STR_CON ".connect"
 #define STR_QUIT ".quit"

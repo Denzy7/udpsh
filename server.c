@@ -1,7 +1,11 @@
-#include "udpsh_sock.h"
 #include <string.h> /* memset */
-#include <stdio.h>
+#include <stdio.h> /* snprintf */
 #include <arpa/inet.h> /* inet_ntoa */
+#include <unistd.h> /* fork, execvp */
+#include <sys/wait.h> /* waitpid */
+#include <stdlib.h> /* exit */
+
+#include "udpsh_sock.h"
 #include "udpsh_server.h"
 #include "udpsh_util.h"
 
@@ -173,10 +177,44 @@ void* session(void* arg)
         /* check if session is still valid after waiting */
         if(session_client->id != UDPSH_SERVER_SES_INV)
         {
-            snprintf(session_client->global_sock.buffer, UDPSH_SOCK_BUFSZ,
-                     "this would be some output");
             printf("cmdbuf: %s\n", session_client->cmdbuf);
-            udpsh_sock_send(&session_client->global_sock);
+
+            int ipc[2];
+            if(pipe(ipc) < 0)
+            {
+                perror("pipe error");
+                snprintf(session_client->global_sock.buffer, UDPSH_SOCK_BUFSZ,
+                         "pipe error");
+            }else
+            {
+                pid_t ch = fork();
+                int status;
+                if(ch < 0)
+                {
+                    perror("fork error");
+                    snprintf(session_client->global_sock.buffer, UDPSH_SOCK_BUFSZ,
+                             "fork error");
+                }else if(ch == 0)
+                {
+                    /* child */
+                    close(ipc[0]); //unused read
+                    write(ipc[1], "child output...", 16);
+                    close(ipc[1]);
+                    exit(0);
+                }else
+                {
+                    /* parent */
+                    printf("waiting for %d... ", ch);
+                    fflush(stdout);
+                    waitpid(ch, &status, 0);
+                    printf("done. status=%d\n", status);
+                    close(ipc[1]); //unused write
+                    memset(session_client->global_sock.buffer, 0, sizeof(session_client->global_sock.buffer));
+                    read(ipc[0], session_client->global_sock.buffer, 16);
+                    printf("%s\n", session_client->global_sock.buffer);
+                    close(ipc[0]);
+                }
+            }
         }else if(addrcmp(&session_client->sock.addr.sin_addr, &session_client->global_sock.addr.sin_addr) != 0 &&
                              session_client->id != UDPSH_SERVER_SES_INV)
         {
@@ -184,8 +222,8 @@ void* session(void* arg)
                      "inconsistent address a=%s != b=%s try reconnecting",
                      inet_ntoa(session_client->sock.addr.sin_addr),
                      inet_ntoa(session_client->global_sock.addr.sin_addr));
-            udpsh_sock_send(&session_client->global_sock);
         }
+        udpsh_sock_send(&session_client->global_sock);
         pthread_mutex_unlock(&session_client->mut);
     }
     printf("id %d is done\n", session_client->id);
