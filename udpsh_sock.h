@@ -3,7 +3,7 @@
 
 #include <netinet/in.h> /* sockaddr_in, htons */
 #include <stddef.h> /* NULL, size */
-#define UDPSH_SOCK_PORT 0xf00d
+#define UDPSH_SOCK_PORT 0x3333
 #define UDPSH_SOCK_BUFSZ 1024
 struct udpsh_sock
 {
