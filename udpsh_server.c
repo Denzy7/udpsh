@@ -96,6 +96,15 @@ int main(int argc, char *argv[])
                 {
                     sessionid = i + 1;
                     sessions[i].id = sessionid;
+
+                    /* copy inital addr */
+                    memcpy(&sessions[i].sock.addr.sin_addr,
+                            &sock_global_client.addr.sin_addr,
+                            sizeof(struct in_addr));
+
+                    printf("cp: %s\n",
+                           inet_ntoa(sessions[i].sock.addr.sin_addr));
+
                     if(pthread_create(&sessions[i].thread, NULL, session, &sessions[i]) != 0)
                     {
                         sessionid = UDPSH_SERVER_SES_INV;
@@ -185,7 +194,14 @@ void* session(void* arg)
         pthread_mutex_lock(&session_client->mut);
         pthread_cond_wait(&session_client->cond, &session_client->mut);
         /* check if session is still valid after waiting */
-        if(session_client->id != UDPSH_SERVER_SES_INV)
+        if(addrcmp(&session_client->sock.addr.sin_addr, &session_client->global_sock.addr.sin_addr) != 0 &&
+                                     session_client->id != UDPSH_SERVER_SES_INV)
+        {
+            snprintf(session_client->global_sock.buffer, UDPSH_SOCK_BUFSZ,
+                     "inconsistent address a=%s != b=%s try reconnecting",
+                     inet_ntoa(session_client->sock.addr.sin_addr),
+                     inet_ntoa(session_client->global_sock.addr.sin_addr));
+        }else if(session_client->id != UDPSH_SERVER_SES_INV)
         {
             /* split buf into separate strings */
             int max_args = 2;
@@ -250,13 +266,6 @@ void* session(void* arg)
                     free(argv);
                 }
             }
-        }else if(addrcmp(&session_client->sock.addr.sin_addr, &session_client->global_sock.addr.sin_addr) != 0 &&
-                             session_client->id != UDPSH_SERVER_SES_INV)
-        {
-            snprintf(session_client->global_sock.buffer, UDPSH_SOCK_BUFSZ,
-                     "inconsistent address a=%s != b=%s try reconnecting",
-                     inet_ntoa(session_client->sock.addr.sin_addr),
-                     inet_ntoa(session_client->global_sock.addr.sin_addr));
         }
 
         if(pktloss)
