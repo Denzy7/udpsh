@@ -43,16 +43,16 @@ int main(int argc, char *argv[])
 
     while(1)
     {
-        printf("waiting for global msg\n");
+//        printf("waiting for global msg\n");
         struct udpsh_sock sock_global_client;
         sock_global_client.addrlen = sizeof(struct sockaddr_in);
         sock_global_client.sock = sock_server.sock;
         udpsh_sock_recv(&sock_server, &sock_global_client.addr, &sock_global_client.addrlen);
         clientack(&sock_global_client);
 
-        printf("from %s\nbuffer=%s\n",
-               inet_ntoa(sock_global_client.addr.sin_addr),
-               sock_server.buffer);
+//        printf("from %s\nbuffer=%s\n",
+//               inet_ntoa(sock_global_client.addr.sin_addr),
+//               sock_server.buffer);
 
         /* nasty inextensible code here! */
         int parse_sessionid = 0;
@@ -172,7 +172,7 @@ void* session(void* arg)
     pthread_cond_init(&session_client->cond, NULL);
     while(session_client->id != UDPSH_SERVER_SES_INV)
     {
-        printf("waiting for msg raise client %d\n", session_client->id);
+//        printf("waiting for msg raise client %d\n", session_client->id);
         pthread_mutex_lock(&session_client->mut);
         pthread_cond_wait(&session_client->cond, &session_client->mut);
         /* check if session is still valid after waiting */
@@ -232,10 +232,10 @@ void* session(void* arg)
                 }else
                 {
                     /* parent */
-                    printf("waiting for %d... ", ch);
+//                    printf("waiting for %d... ", ch);
                     fflush(stdout);
                     waitpid(ch, &status, 0);
-                    printf("done. status=%d\n", status);
+//                    printf("done. status=%d\n", status);
                     memset(session_client->global_sock.buffer, 0, sizeof(session_client->global_sock.buffer));
                     read(ipc[0], session_client->global_sock.buffer, sizeof(session_client->global_sock.buffer));
 //                    printf("%s\n", session_client->global_sock.buffer);
@@ -255,7 +255,7 @@ void* session(void* arg)
         udpsh_sock_send(&session_client->global_sock);
         pthread_mutex_unlock(&session_client->mut);
     }
-    printf("id %d is done\n", session_client->id);
+//    printf("id %d is done\n", session_client->id);
     pthread_mutex_destroy(&session_client->mut);
     pthread_cond_destroy(&session_client->cond);
 
@@ -264,7 +264,7 @@ void* session(void* arg)
 
 void seswake(struct udpsh_server_session* ses)
 {
-    printf("waking session %d\n", ses->id);
+//    printf("waking session %d\n", ses->id);
     pthread_mutex_lock(&ses->mut);
     pthread_cond_signal(&ses->cond);
     pthread_mutex_unlock(&ses->mut);
@@ -272,14 +272,14 @@ void seswake(struct udpsh_server_session* ses)
 
 void sesjoin(struct udpsh_server_session* ses)
 {
-    printf("joining session %d\n", ses->id);
+//    printf("joining session %d\n", ses->id);
     pthread_join(ses->thread, NULL);
 }
 
 void sesinval(struct udpsh_server_session* ses)
 {
     ses->id = UDPSH_SERVER_SES_INV;
-    printf("invalidating session %d\n", ses->id);
+//    printf("invalidating session %d\n", ses->id);
     seswake(ses);
     sesjoin(ses);
     memset(ses, 0, sizeof(struct udpsh_server_session));
