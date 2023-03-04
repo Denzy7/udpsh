@@ -4,6 +4,7 @@
 #include <unistd.h> /* fork, execvp */
 #include <sys/wait.h> /* waitpid */
 #include <stdlib.h> /* exit */
+#include <time.h> /* time(NULL) */
 #include <errno.h> /* errno */
 
 #include "udpsh_sock.h"
@@ -12,6 +13,7 @@
 
 struct udpsh_sock sock_server;
 struct udpsh_server_session sessions[4];
+int pktloss = 0;
 
 /* session thread function */
 void* session(void* arg);
@@ -33,6 +35,13 @@ int addrcmp(struct in_addr* a, struct in_addr* b);
 
 int main(int argc, char *argv[])
 {
+    if(argv[1] != NULL)
+    {
+        sscanf(argv[1], "%d", &pktloss);
+    }
+
+    srand(time(NULL));
+
     memset(&sessions, 0, sizeof(sessions));
     memset(&sock_server, 0, sizeof(sock_server));
 
@@ -252,6 +261,36 @@ void* session(void* arg)
                      inet_ntoa(session_client->sock.addr.sin_addr),
                      inet_ntoa(session_client->global_sock.addr.sin_addr));
         }
+
+        if(pktloss)
+        {
+            int strat = 0;
+            size_t bfsz = strlen(session_client->global_sock.buffer);
+            size_t times = (pktloss / 100.0) * bfsz;
+            for(size_t i = 0; i < times; i++)
+            {
+                size_t at = rand() % bfsz;
+                if(strat == 0)
+                {
+                    /* flip a bit */
+                    session_client->global_sock.buffer[at - 1] ^= 0xff;
+                }else if(strat == 1)
+                {
+                    /* replace byte with random character */
+                    session_client->global_sock.buffer[at - 1] = rand() % 255;
+                }else if(strat == 2)
+                {
+                    /* replace with asterisk */
+                    session_client->global_sock.buffer[at - 1] = '*';
+                }else
+                {
+                    strat = 0;
+                }
+
+                strat++;
+            }
+        }
+
         udpsh_sock_send(&session_client->global_sock);
         pthread_mutex_unlock(&session_client->mut);
     }
