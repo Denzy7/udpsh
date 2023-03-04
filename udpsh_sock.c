@@ -2,8 +2,11 @@
 
 #include <sys/socket.h> /* socket */
 #include <arpa/inet.h> /* inet_aton */
+#include <netdb.h> /* getaddrinfo */
+#include <unistd.h> /* close */
 
 #include <stdio.h>
+#include <string.h>
 int udpsh_sock_make(const char* ipv4dest, struct udpsh_sock* udpsh_sock)
 {
     if((udpsh_sock->sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -17,11 +20,23 @@ int udpsh_sock_make(const char* ipv4dest, struct udpsh_sock* udpsh_sock)
         udpsh_sock->addr.sin_addr.s_addr = INADDR_ANY;
     }else
     {
-        if(inet_aton(ipv4dest, &udpsh_sock->addr.sin_addr) == 0)
-        {
-            printf("cannot parse input address\n");
+        struct addrinfo hints, *res;
+        int status;
+        memset(&hints, 0, sizeof(hints));
+
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+
+        if ((status = getaddrinfo(ipv4dest, NULL, &hints, &res)) != 0) {
+            fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+            close(udpsh_sock->sock);
             return 1;
         }
+        struct sockaddr_in* ip4 = (struct sockaddr_in*)res->ai_addr;
+        memcpy(&udpsh_sock->addr.sin_addr,
+               &ip4->sin_addr,
+               sizeof(struct in_addr));
+        freeaddrinfo(res);
     }
     udpsh_sock->addr.sin_port = htons(UDPSH_SOCK_PORT);
 
@@ -29,6 +44,16 @@ int udpsh_sock_make(const char* ipv4dest, struct udpsh_sock* udpsh_sock)
            inet_ntoa(udpsh->addr.sin_addr),
            ntohs(udpsh->addr.sin_port));*/
 
+    return 0;
+}
+
+int udpsh_sock_close(const struct udpsh_sock* udpsh_sock)
+{
+    if(close(udpsh_sock->sock) < 0)
+    {
+        perror("udpsh_sock_close failed");
+        return 1;
+    }
     return 0;
 }
 

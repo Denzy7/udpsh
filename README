@@ -8,6 +8,7 @@ udpsh_util:
 udpsh_sock:
 - a small library for handling common server and client udp functions
 - common port for both client and server
+- dns resolution
 - sendto and recvfrom with error checking
 - blocking by default to avoid common threading issues like synchronization
 - provides a static socket send/receive buffer
@@ -19,10 +20,11 @@ udpsh_server:
 - upon disconnection, the session is made available for others to connect
 - session threads are conditional, i.e they wont run unless there is new input from its client
 - implements a basic global queue processing
-- messages coming asin are parsed and interpeted to execute functions
+- messages coming in are parsed and interpeted to execute their functions
 - implements acks where every message from client receives an acknowlegment
 - checks connected client address consistency between messages
 - verbose in terms of how an error occured to clients
+- simulate packet loss by scrambling buffer before sending to client
 
 udpsh_client:
 - connects to udpsh_server
@@ -65,4 +67,6 @@ disconnect:
 - invalidation works by setting sessionid to invalid, waking thread, joining it then memset it to 0
 
 === NOT WORKING ===
-- verifying address consistency between messages
+- verifying address consistency between messages (implemented but not tested)
+    - this is difficult to test since an address change often means an interface, iptables or packet header changes which makes
+      the packets not to be sent

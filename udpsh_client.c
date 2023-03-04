@@ -168,4 +168,6 @@ void disconn()
     udpsh_sock_recv(&sock_server, NULL, NULL);
     printf("done\n");
     printf("%s", sock_server.buffer);
+
+    udpsh_sock_close(&sock_server);
 }
