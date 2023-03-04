@@ -102,9 +102,6 @@ int main(int argc, char *argv[])
                             &sock_global_client.addr.sin_addr,
                             sizeof(struct in_addr));
 
-                    printf("cp: %s\n",
-                           inet_ntoa(sessions[i].sock.addr.sin_addr));
-
                     if(pthread_create(&sessions[i].thread, NULL, session, &sessions[i]) != 0)
                     {
                         sessionid = UDPSH_SERVER_SES_INV;
@@ -129,16 +126,16 @@ int main(int argc, char *argv[])
             }
         }else if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_DIS, strlen(UDPSH_SERVER_FUN_DIS)) == 0)
         {
-//            if(addrcmp(&session_global->sock.addr.sin_addr, &sock_global_client.addr.sin_addr) != 0 &&
-//                    session_global->id != UDPSH_SERVER_SES_INV)
-//            {
-//                snprintf(sock_global_client.buffer, UDPSH_SOCK_BUFSZ,
-//                         "inconsistent address a=%s != b=%s try reconnecting",
-//                         inet_ntoa(session_global->sock.addr.sin_addr),
-//                         inet_ntoa(sock_global_client.addr.sin_addr));
-//                udpsh_sock_send(&sock_global_client);
-//                continue;
-//            }
+            if(addrcmp(&session_global->sock.addr.sin_addr, &sock_global_client.addr.sin_addr) != 0 &&
+                    session_global->id != UDPSH_SERVER_SES_INV)
+            {
+                snprintf(sock_global_client.buffer, UDPSH_SOCK_BUFSZ,
+                         "inconsistent address a=%s != b=%s try reconnecting",
+                         inet_ntoa(session_global->sock.addr.sin_addr),
+                         inet_ntoa(sock_global_client.addr.sin_addr));
+                udpsh_sock_send(&sock_global_client);
+                continue;
+            }
             snprintf(sock_global_client.buffer, UDPSH_SOCK_BUFSZ,
                      "disconnected successfully");
             udpsh_sock_send(&sock_global_client);
