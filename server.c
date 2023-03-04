@@ -4,6 +4,7 @@
 #include <unistd.h> /* fork, execvp */
 #include <sys/wait.h> /* waitpid */
 #include <stdlib.h> /* exit */
+#include <errno.h> /* errno */
 
 #include "udpsh_sock.h"
 #include "udpsh_server.h"
@@ -177,7 +178,23 @@ void* session(void* arg)
         /* check if session is still valid after waiting */
         if(session_client->id != UDPSH_SERVER_SES_INV)
         {
-            printf("cmdbuf: %s\n", session_client->cmdbuf);
+            if(session_client->cmdbuf[strlen(session_client->cmdbuf) - 1] == ' ')
+                session_client->cmdbuf[strlen(session_client->cmdbuf) - 1]= 0;
+
+            /* split buf into separate strings */
+            int max_args = 2;
+            char** argv = malloc(max_args * sizeof(char*));
+            int argc = 0;
+            char* token = strtok(session_client->cmdbuf, " ");
+            while (token != NULL) {
+                if (argc >= max_args - 1) {
+                    max_args *= 2;
+                    argv = realloc(argv, max_args * sizeof(char*));
+                }
+                argv[argc++] = token;
+                token = strtok(NULL, " ");
+            }
+            argv[argc] = NULL;
 
             int ipc[2];
             if(pipe(ipc) < 0)
@@ -197,22 +214,21 @@ void* session(void* arg)
                 }else if(ch == 0)
                 {
                     /* child */
-                    close(ipc[0]); //unused read
-                    if(dup2(ipc[1], STDOUT_FILENO) < 0)
+                    if(dup2(ipc[1], STDOUT_FILENO) < 0 || dup2(ipc[1], STDERR_FILENO) < 0)
                     {
                         perror("dup2 error");
                         write(ipc[1], "dup2 error", 7);
                     }else
                     {
-                        char* argp[] = {session_client->cmdbuf, NULL};
-                        if(execvp(argp[0], argp) < 0)
+                        if(execvp(argv[0], argv) < 0)
                         {
-                            perror("execvp error");
-                            write(ipc[1], "execvp error", 12);
+                            char execerrmsg[256];
+                            snprintf(execerrmsg, sizeof(execerrmsg),
+                                     "server execvp error: %s", strerror(errno));
+                            write(ipc[1], execerrmsg, strlen(execerrmsg));
                         }
                     }
-                    close(ipc[1]);
-                    exit(0);
+                    exit(1);
                 }else
                 {
                     /* parent */
@@ -220,11 +236,12 @@ void* session(void* arg)
                     fflush(stdout);
                     waitpid(ch, &status, 0);
                     printf("done. status=%d\n", status);
-                    close(ipc[1]); //unused write
                     memset(session_client->global_sock.buffer, 0, sizeof(session_client->global_sock.buffer));
                     read(ipc[0], session_client->global_sock.buffer, sizeof(session_client->global_sock.buffer));
 //                    printf("%s\n", session_client->global_sock.buffer);
                     close(ipc[0]);
+                    close(ipc[1]);
+                    free(argv);
                 }
             }
         }else if(addrcmp(&session_client->sock.addr.sin_addr, &session_client->global_sock.addr.sin_addr) != 0 &&
