@@ -198,7 +198,19 @@ void* session(void* arg)
                 {
                     /* child */
                     close(ipc[0]); //unused read
-                    write(ipc[1], "child output...", 16);
+                    if(dup2(ipc[1], STDOUT_FILENO) < 0)
+                    {
+                        perror("dup2 error");
+                        write(ipc[1], "dup2 error", 7);
+                    }else
+                    {
+                        char* argp[] = {session_client->cmdbuf, NULL};
+                        if(execvp(argp[0], argp) < 0)
+                        {
+                            perror("execvp error");
+                            write(ipc[1], "execvp error", 12);
+                        }
+                    }
                     close(ipc[1]);
                     exit(0);
                 }else
@@ -210,8 +222,8 @@ void* session(void* arg)
                     printf("done. status=%d\n", status);
                     close(ipc[1]); //unused write
                     memset(session_client->global_sock.buffer, 0, sizeof(session_client->global_sock.buffer));
-                    read(ipc[0], session_client->global_sock.buffer, 16);
-                    printf("%s\n", session_client->global_sock.buffer);
+                    read(ipc[0], session_client->global_sock.buffer, sizeof(session_client->global_sock.buffer));
+//                    printf("%s\n", session_client->global_sock.buffer);
                     close(ipc[0]);
                 }
             }

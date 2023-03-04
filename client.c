@@ -121,6 +121,13 @@ int main()
                 printf("unknown udpsh command. type " STR_HELP " for help\n");
             }else
             {
+                /* remove newline */
+                for(size_t i = 0; i < strlen(inputbuf); i++)
+                {
+                    if(inputbuf[i] == '\n')
+                        inputbuf[i] = 0;
+                }
+
                 snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
                          "%s%s%d%s%s",
                          UDPSH_SERVER_FUN_EXE, UDPSH_SERVER_TOK,
@@ -134,7 +141,7 @@ int main()
                 fflush(stdout);
                 udpsh_sock_recv(&sock_server, NULL, NULL);
                 printf("done\n");
-                printf("%s", sock_server.buffer);
+                printf("\n%s", sock_server.buffer);
             }
         }
     }
