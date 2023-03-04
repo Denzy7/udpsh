@@ -294,7 +294,9 @@ void* session(void* arg)
             }
         }
 
-        udpsh_sock_send(&session_client->global_sock);
+        if(session_client->id != UDPSH_SERVER_SES_INV)
+            udpsh_sock_send(&session_client->global_sock);
+
         pthread_mutex_unlock(&session_client->mut);
     }
 //    printf("id %d is done\n", session_client->id);
