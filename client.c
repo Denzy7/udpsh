@@ -10,6 +10,7 @@
 #define STR_HELP ".help"
 #define STR_DISCON ".disconnect"
 
+int sessionid = UDPSH_SERVER_SES_INV;
 struct udpsh_sock sock_server;
 
 void serverack()
@@ -31,9 +32,30 @@ void shellhelp()
            STR_QUIT": you would not beleive it!\n");
 }
 
+void disconn()
+{
+    if(sessionid == UDPSH_SERVER_SES_INV)
+        return;
+
+    printf("disconnecting...\n");
+
+    snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
+             "%s%s%d",
+             UDPSH_SERVER_FUN_DIS, UDPSH_SERVER_TOK,
+             sessionid);
+    udpsh_sock_send(&sock_server);
+    serverack();
+    sessionid = UDPSH_SERVER_SES_INV;
+
+    /* wait for disconnection message */
+    printf("waiting for disconnection message from server... ");
+    fflush(stdout);
+    udpsh_sock_recv(&sock_server, NULL, NULL);
+    printf("done\n");
+    printf("%s", sock_server.buffer);
+}
 int main()
 {
-    int sessionid = UDPSH_SERVER_SES_INV;
     // we want half the size to avoid snprintf truncation warnings
     char inputbuf[UDPSH_SOCK_BUFSZ / 2];
     int running = 1;
@@ -52,6 +74,7 @@ int main()
 
         if(strncmp(inputbuf,STR_QUIT, strlen(STR_QUIT)) == 0)
         {
+            disconn();
             sessionid = UDPSH_SERVER_SES_INV;
             running = 0;
         }else if(strncmp(inputbuf,STR_HELP, strlen(STR_HELP)) == 0)
@@ -65,20 +88,7 @@ int main()
                 continue;
             }else
             {
-                snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
-                         "%s%s%d",
-                         UDPSH_SERVER_FUN_DIS, UDPSH_SERVER_TOK,
-                         sessionid);
-                udpsh_sock_send(&sock_server);
-                serverack();
-                sessionid = UDPSH_SERVER_SES_INV;
-
-                /* wait for disconnection message */
-                printf("waiting for disconnection message from server... ");
-                fflush(stdout);
-                udpsh_sock_recv(&sock_server, NULL, NULL);
-                printf("done\n");
-                printf("%s", sock_server.buffer);
+                disconn();
             }
         }else if(strncmp(inputbuf,STR_CON, strlen(STR_CON)) == 0)
         {
@@ -145,7 +155,7 @@ int main()
             }
         }
     }
-    printf("have a nice day!\n");
+    printf("\nHAVE A NICE DAY!\n\n");
 
     return 0;
 }
