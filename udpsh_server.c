@@ -187,9 +187,6 @@ void* session(void* arg)
         /* check if session is still valid after waiting */
         if(session_client->id != UDPSH_SERVER_SES_INV)
         {
-            if(session_client->cmdbuf[strlen(session_client->cmdbuf) - 1] == ' ')
-                session_client->cmdbuf[strlen(session_client->cmdbuf) - 1]= 0;
-
             /* split buf into separate strings */
             int max_args = 2;
             char** argv = malloc(max_args * sizeof(char*));
