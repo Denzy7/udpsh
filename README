@@ -70,3 +70,8 @@ disconnect:
 - verifying address consistency between messages (implemented but not tested)
     - this is difficult to test since an address change often means an interface, iptables or packet header changes which makes
       the packets not to be sent
+
+=== RUNNING ===
+- make
+- ./udpsh_server [packetloss in %]&
+- ./udpsh_client
