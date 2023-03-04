@@ -1,0 +1,68 @@
+UDPSH - a concurrent udp server daemon and client shell
+
+=== DESIGN ===
+
+udpsh_util:
+- a header for common C utilities and functions
+
+udpsh_sock:
+- a small library for handling common server and client udp functions
+- common port for both client and server
+- sendto and recvfrom with error checking
+- blocking by default to avoid common threading issues like synchronization
+- provides a static socket send/receive buffer
+
+udpsh_server:
+- supports up to 4 concurrent sessions
+- can be extended by increasing sessions array
+- returns a sessionid to client for future communications
+- upon disconnection, the session is made available for others to connect
+- session threads are conditional, i.e they wont run unless there is new input from its client
+- implements a basic global queue processing
+- messages coming asin are parsed and interpeted to execute functions
+- implements acks where every message from client receives an acknowlegment
+- checks connected client address consistency between messages
+- verbose in terms of how an error occured to clients
+
+udpsh_client:
+- connects to udpsh_server
+- implements acks where every message to server waits for an acknowlegment
+- interactive prompt. $ = connected, > = not connected
+- disconnects active session on quit
+- help command
+
+=== EXECUTION SEQUENCE ===
+
+udpsh_server_main:
+- wait for messages to be received
+- clientack after any message
+- store the sender info in a global udpsh_sock object
+- tokenizes the messages received to function, sessionid and commandbuffer
+- check if its connect, execute or disconnect and call appropriate function
+
+connect:
+- check is connected otherwise initiate a new one and wait for sessionid
+- on server, look for unused sessions in array
+- if found, spawn a thread, break loop and respond to client with sessionid
+- on client, if sessionid valid, store it locally, otherwise wait for reason for error
+- on server, send error to client is sessionid is invalid
+- the session thread sets up condition variable and loops while session is valid
+- its going to block until its condition variable is woken for a message send to its sessionsid
+
+execute:
+- if valid sessionid copy sender info to associated sessionid
+- wake the session thread
+- if still valid sessionid, tokenize commandbuffer into individual strings separated by spaces
+- create a pipe and fork process
+- on parent process, waitpid child
+- on child process, dup2 stdout and stderr to pipe writing end such that writes to stdout and stderr will be sent to client
+- on parent, when child finishes, read pipe end to its copy of global udpsh_sock buffer then close the pipe and free tokenized commandbuffer
+- if enabled, simulate packet loss by scrambling the buffer
+- send to client
+
+disconnect:
+- send disconnect message to client and invalidate session
+- invalidation works by setting sessionid to invalid, waking thread, joining it then memset it to 0
+
+=== NOT WORKING ===
+- verifying address consistency between messages
