@@ -12,48 +12,10 @@
 
 int sessionid = UDPSH_SERVER_SES_INV;
 struct udpsh_sock sock_server;
+void disconn();
+void shellhelp();
+void serverack();
 
-void serverack()
-{
-    printf("waiting for server ack... ");
-    fflush(stdout);
-    udpsh_sock_recv(&sock_server, NULL, NULL);
-    if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_ACK, strlen(UDPSH_SERVER_FUN_ACK)) == 0)
-    {
-        printf("done\n");
-    }
-}
-
-void shellhelp()
-{
-    printf(STR_CON" [ipv4-address]: connect to server\n"
-           STR_DISCON": disconnect current server\n"
-           STR_HELP": this message\n"
-           STR_QUIT": you would not beleive it!\n");
-}
-
-void disconn()
-{
-    if(sessionid == UDPSH_SERVER_SES_INV)
-        return;
-
-    printf("disconnecting...\n");
-
-    snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
-             "%s%s%d",
-             UDPSH_SERVER_FUN_DIS, UDPSH_SERVER_TOK,
-             sessionid);
-    udpsh_sock_send(&sock_server);
-    serverack();
-    sessionid = UDPSH_SERVER_SES_INV;
-
-    /* wait for disconnection message */
-    printf("waiting for disconnection message from server... ");
-    fflush(stdout);
-    udpsh_sock_recv(&sock_server, NULL, NULL);
-    printf("done\n");
-    printf("%s", sock_server.buffer);
-}
 int main()
 {
     // we want half the size to avoid snprintf truncation warnings
@@ -158,4 +120,46 @@ int main()
     printf("\nHAVE A NICE DAY!\n\n");
 
     return 0;
+}
+
+void serverack()
+{
+    printf("waiting for server ack... ");
+    fflush(stdout);
+    udpsh_sock_recv(&sock_server, NULL, NULL);
+    if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_ACK, strlen(UDPSH_SERVER_FUN_ACK)) == 0)
+    {
+        printf("done\n");
+    }
+}
+
+void shellhelp()
+{
+    printf(STR_CON" [ipv4-address]: connect to server\n"
+           STR_DISCON": disconnect current server\n"
+           STR_HELP": this message\n"
+           STR_QUIT": you would not beleive it!\n");
+}
+
+void disconn()
+{
+    if(sessionid == UDPSH_SERVER_SES_INV)
+        return;
+
+    printf("disconnecting...\n");
+
+    snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
+             "%s%s%d",
+             UDPSH_SERVER_FUN_DIS, UDPSH_SERVER_TOK,
+             sessionid);
+    udpsh_sock_send(&sock_server);
+    serverack();
+    sessionid = UDPSH_SERVER_SES_INV;
+
+    /* wait for disconnection message */
+    printf("waiting for disconnection message from server... ");
+    fflush(stdout);
+    udpsh_sock_recv(&sock_server, NULL, NULL);
+    printf("done\n");
+    printf("%s", sock_server.buffer);
 }
