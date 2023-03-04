@@ -8,62 +8,23 @@
 struct udpsh_sock sock_server;
 struct udpsh_server_session sessions[4];
 
-void clientack(struct udpsh_sock* sock)
-{
-    snprintf(sock->buffer, UDPSH_SOCK_BUFSZ,
-             UDPSH_SERVER_FUN_ACK);
-    udpsh_sock_send(sock);
-}
+/* session thread function */
+void* session(void* arg);
 
-void* session(void* arg)
-{
-    struct udpsh_server_session* session_client = arg;
-    pthread_mutex_init(&session_client->mut, NULL);
-    pthread_cond_init(&session_client->cond, NULL);
-    while(session_client->id != UDPSH_SERVER_SES_INV)
-    {
-        printf("waiting for msg raise client %d\n", session_client->id);
-        pthread_mutex_lock(&session_client->mut);
-        pthread_cond_wait(&session_client->cond, &session_client->mut);
-        /* check if session is still valid after waiting */
-        if(session_client->id != UDPSH_SERVER_SES_INV)
-        {
-            snprintf(session_client->global_sock.buffer, UDPSH_SOCK_BUFSZ,
-                     "this would be some output");
-            printf("cmdbuf: %s\n", session_client->cmdbuf);
-            udpsh_sock_send(&session_client->global_sock);
-        }
-        pthread_mutex_unlock(&session_client->mut);
-    }
-    printf("id %d is done\n", session_client->id);
-    pthread_mutex_destroy(&session_client->mut);
-    pthread_cond_destroy(&session_client->cond);
+/* wake a waiting session */
+void seswake(struct udpsh_server_session* ses);
 
-    return NULL;
-}
+/* join a finished session thread */
+void sesjoin(struct udpsh_server_session* ses);
 
-void seswake(struct udpsh_server_session* ses)
-{
-    printf("waking session %d\n", ses->id);
-    pthread_mutex_lock(&ses->mut);
-    pthread_cond_signal(&ses->cond);
-    pthread_mutex_unlock(&ses->mut);
-}
+/* invalidate session */
+void sesinval(struct udpsh_server_session* ses);
 
-void sesjoin(struct udpsh_server_session* ses)
-{
-    printf("joining session %d\n", ses->id);
-    pthread_join(ses->thread, NULL);
-}
+/* send client acknowledgement */
+void clientack(struct udpsh_sock* sock);
 
-void sesinval(struct udpsh_server_session* ses)
-{
-    ses->id = UDPSH_SERVER_SES_INV;
-    printf("invalidating session %d\n", ses->id);
-    seswake(ses);
-    sesjoin(ses);
-    memset(ses, 0, sizeof(struct udpsh_server_session));
-}
+/* compare address*/
+int addrcmp(struct in_addr* a, struct in_addr* b);
 
 int main(int argc, char *argv[])
 {
@@ -89,7 +50,7 @@ int main(int argc, char *argv[])
                sock_server.buffer);
 
         /* nasty inextensible code here! */
-        int parse_sessionid;
+        int parse_sessionid = 0;
         char parse_buf[UDPSH_SOCK_BUFSZ];
         strncpy(parse_buf, sock_server.buffer, UDPSH_SOCK_BUFSZ);
         char parse_cmdbuf[UDPSH_SOCK_BUFSZ / 2];
@@ -145,8 +106,21 @@ int main(int argc, char *argv[])
             }
         }else if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_DIS, strlen(UDPSH_SERVER_FUN_DIS)) == 0)
         {
+//            if(addrcmp(&session_global->sock.addr.sin_addr, &sock_global_client.addr.sin_addr) != 0 &&
+//                    session_global->id != UDPSH_SERVER_SES_INV)
+//            {
+//                snprintf(sock_global_client.buffer, UDPSH_SOCK_BUFSZ,
+//                         "inconsistent address a=%s != b=%s try reconnecting",
+//                         inet_ntoa(session_global->sock.addr.sin_addr),
+//                         inet_ntoa(sock_global_client.addr.sin_addr));
+//                udpsh_sock_send(&sock_global_client);
+//                continue;
+//            }
+            snprintf(sock_global_client.buffer, UDPSH_SOCK_BUFSZ,
+                     "disconnected successfully");
+            udpsh_sock_send(&sock_global_client);
+
             sesinval(session_global);
-            clientack(&sock_global_client);
             memset(session_global, 0, sizeof(struct udpsh_server_session));
         }else if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_EXE, strlen(UDPSH_SERVER_FUN_EXE)) == 0)
         {
@@ -172,4 +146,74 @@ int main(int argc, char *argv[])
     }
 
     return 0;
+}
+
+void clientack(struct udpsh_sock* sock)
+{
+    snprintf(sock->buffer, UDPSH_SOCK_BUFSZ,
+             UDPSH_SERVER_FUN_ACK);
+    udpsh_sock_send(sock);
+}
+
+int addrcmp(struct in_addr* a, struct in_addr* b)
+{
+    return memcmp(a, b, sizeof(struct in_addr));
+}
+
+void* session(void* arg)
+{
+    struct udpsh_server_session* session_client = arg;
+    pthread_mutex_init(&session_client->mut, NULL);
+    pthread_cond_init(&session_client->cond, NULL);
+    while(session_client->id != UDPSH_SERVER_SES_INV)
+    {
+        printf("waiting for msg raise client %d\n", session_client->id);
+        pthread_mutex_lock(&session_client->mut);
+        pthread_cond_wait(&session_client->cond, &session_client->mut);
+        /* check if session is still valid after waiting */
+        if(session_client->id != UDPSH_SERVER_SES_INV)
+        {
+            snprintf(session_client->global_sock.buffer, UDPSH_SOCK_BUFSZ,
+                     "this would be some output");
+            printf("cmdbuf: %s\n", session_client->cmdbuf);
+            udpsh_sock_send(&session_client->global_sock);
+        }else if(addrcmp(&session_client->sock.addr.sin_addr, &session_client->global_sock.addr.sin_addr) != 0 &&
+                             session_client->id != UDPSH_SERVER_SES_INV)
+        {
+            snprintf(session_client->global_sock.buffer, UDPSH_SOCK_BUFSZ,
+                     "inconsistent address a=%s != b=%s try reconnecting",
+                     inet_ntoa(session_client->sock.addr.sin_addr),
+                     inet_ntoa(session_client->global_sock.addr.sin_addr));
+            udpsh_sock_send(&session_client->global_sock);
+        }
+        pthread_mutex_unlock(&session_client->mut);
+    }
+    printf("id %d is done\n", session_client->id);
+    pthread_mutex_destroy(&session_client->mut);
+    pthread_cond_destroy(&session_client->cond);
+
+    return NULL;
+}
+
+void seswake(struct udpsh_server_session* ses)
+{
+    printf("waking session %d\n", ses->id);
+    pthread_mutex_lock(&ses->mut);
+    pthread_cond_signal(&ses->cond);
+    pthread_mutex_unlock(&ses->mut);
+}
+
+void sesjoin(struct udpsh_server_session* ses)
+{
+    printf("joining session %d\n", ses->id);
+    pthread_join(ses->thread, NULL);
+}
+
+void sesinval(struct udpsh_server_session* ses)
+{
+    ses->id = UDPSH_SERVER_SES_INV;
+    printf("invalidating session %d\n", ses->id);
+    seswake(ses);
+    sesjoin(ses);
+    memset(ses, 0, sizeof(struct udpsh_server_session));
 }

@@ -24,7 +24,10 @@ void serverack()
 
 void shellhelp()
 {
-    printf("help here...\n");
+    printf(STR_CON" [ipv4-address]: connect to server\n"
+           STR_DISCON": disconnect current server\n"
+           STR_HELP": this message\n"
+           STR_QUIT": you would not beleive it!\n");
 }
 
 int main()
@@ -68,6 +71,13 @@ int main()
                 udpsh_sock_send(&sock_server);
                 serverack();
                 sessionid = UDPSH_SERVER_SES_INV;
+
+                /* wait for disconnection message */
+                printf("waiting for disconnection message from server... ");
+                fflush(stdout);
+                udpsh_sock_recv(&sock_server, NULL, NULL);
+                printf("done\n");
+                printf("%s", sock_server.buffer);
             }
         }else if(strncmp(inputbuf,STR_CON, strlen(STR_CON)) == 0)
         {
@@ -120,6 +130,7 @@ int main()
 
                 //server should reply with command output
                 printf("waiting for output from server... ");
+                fflush(stdout);
                 udpsh_sock_recv(&sock_server, NULL, NULL);
                 printf("done\n");
                 printf("%s", sock_server.buffer);
