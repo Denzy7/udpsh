@@ -6,6 +6,7 @@
 #include <stdlib.h> /* exit */
 #include <time.h> /* time(NULL) */
 #include <errno.h> /* errno */
+#include <signal.h> /* signal */
 
 #include "udpsh_sock.h"
 #include "udpsh_server.h"
@@ -33,12 +34,17 @@ void clientack(struct udpsh_sock* sock);
 /* compare address*/
 int addrcmp(struct in_addr* a, struct in_addr* b);
 
+/* signal that causes program to exit */
+void sigexits(int sig);
+int running = 1;
 int main(int argc, char *argv[])
 {
     if(argv[1] != NULL)
     {
         sscanf(argv[1], "%d", &pktloss);
     }
+
+    signal(SIGINT, sigexits);
 
     srand(time(NULL));
 
@@ -50,10 +56,11 @@ int main(int argc, char *argv[])
     if(udpsh_sock_bind(&sock_server) != 0)
         return 1;
 
-    while(1)
+    while(running)
     {
 //        printf("waiting for global msg\n");
         struct udpsh_sock sock_global_client;
+        memset(&sock_global_client, 0, sizeof(sock_global_client));
         sock_global_client.addrlen = sizeof(struct sockaddr_in);
         sock_global_client.sock = sock_server.sock;
         udpsh_sock_recv(&sock_server, &sock_global_client.addr, &sock_global_client.addrlen);
@@ -141,7 +148,7 @@ int main(int argc, char *argv[])
             udpsh_sock_send(&sock_global_client);
 
             sesinval(session_global);
-            memset(session_global, 0, sizeof(struct udpsh_server_session));
+//            memset(session_global, 0, sizeof(struct udpsh_server_session));
         }else if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_EXE, strlen(UDPSH_SERVER_FUN_EXE)) == 0)
         {
             if(session_global->id == UDPSH_SERVER_SES_INV)
@@ -299,7 +306,7 @@ void* session(void* arg)
 
         pthread_mutex_unlock(&session_client->mut);
     }
-//    printf("id %d is done\n", session_client->id);
+//    printf("id %lu is done\n", session_client->thread);
     pthread_mutex_destroy(&session_client->mut);
     pthread_cond_destroy(&session_client->cond);
 
@@ -316,15 +323,21 @@ void seswake(struct udpsh_server_session* ses)
 
 void sesjoin(struct udpsh_server_session* ses)
 {
-//    printf("joining session %d\n", ses->id);
+//    printf("joining session %lu\n", ses->thread);
     pthread_join(ses->thread, NULL);
 }
 
 void sesinval(struct udpsh_server_session* ses)
 {
+    //    printf("invalidating session %d\n", ses->id);
     ses->id = UDPSH_SERVER_SES_INV;
-//    printf("invalidating session %d\n", ses->id);
     seswake(ses);
     sesjoin(ses);
     memset(ses, 0, sizeof(struct udpsh_server_session));
+}
+
+void sigexits(int sig)
+{
+    running = 0;
+    exit(sig + 128);
 }
