@@ -27,6 +27,8 @@ int main()
     // we want half the size to avoid snprintf truncation warnings
     char inputbuf[UDPSH_SOCK_BUFSZ / 2];
     int running = 1;
+    size_t inputbuf_strlen, i;
+    const char* conaddr;
 
     memset(&sock_server, 0, sizeof(sock_server));
 
@@ -41,11 +43,11 @@ int main()
         fgets(inputbuf, sizeof(inputbuf), stdin);
 
         /* remove blank and newline */
-        size_t inputbuf_strlen = strlen(inputbuf);
+        inputbuf_strlen = strlen(inputbuf);
         if(inputbuf[inputbuf_strlen - 1] == ' ')
             inputbuf[inputbuf_strlen - 1] = 0;
 
-        for(size_t i = 0; i < inputbuf_strlen; i++)
+        for(i = 0; i < inputbuf_strlen; i++)
         {
             if(inputbuf[i] == '\n'){
                 inputbuf[i] = 0;
@@ -80,7 +82,7 @@ int main()
                 continue;
             }
 
-            const char* conaddr = inputbuf + strlen(STR_CON) + 1; //+1 space
+            conaddr = inputbuf + strlen(STR_CON) + 1; /* +1 space */
             if(udpsh_sock_make(conaddr, &sock_server) != 0)
             {
                 printf("cannot create socket to server at %s\n", conaddr);
@@ -92,7 +94,7 @@ int main()
             serverack();
             printf("waiting for server to reply with sessionid... ");
             fflush(stdout);
-            //server should reply with our sessionid here
+            /* server should reply with our sessionid here */
             udpsh_sock_recv(&sock_server, NULL, NULL);
             sscanf(sock_server.buffer, "%d", &sessionid);
             if(sessionid == UDPSH_SERVER_SES_INV)
@@ -120,7 +122,7 @@ int main()
                 udpsh_sock_send(&sock_server);
                 serverack();
 
-                //server should reply with command output
+                /* server should reply with command output */
                 printf("waiting for output from server... ");
                 fflush(stdout);
                 udpsh_sock_recv(&sock_server, NULL, NULL);
