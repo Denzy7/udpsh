@@ -29,7 +29,7 @@ int main()
 {
     // we want half the size to avoid snprintf truncation warnings
     char inputbuf[UDPSH_SOCK_BUFSZ / 2];
-    int running = 1, status;
+    int running = 1;
     size_t inputbuf_strlen, i;
     const char* conaddr;
 #ifdef _WIN32
@@ -39,7 +39,7 @@ int main()
 
 #ifdef _WIN32
    wsa_ver = MAKEWORD(2, 2);
-   if((status = WSAStartup(wsa_ver, &wsa_data)) != 0)
+   if(WSAStartup(wsa_ver, &wsa_data) != 0)
    {
        fprintf(stderr, "WSAStartup failed: err=%d\n", WSAGetLastError());
        return 1;
