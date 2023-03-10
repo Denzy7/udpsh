@@ -16,11 +16,12 @@
 #define STR_HELP ".help"
 #define STR_DISCON ".disconnect"
 
-int sessionid = UDPSH_SERVER_SES_INV;
-struct udpsh_sock sock_server;
 void disconn();
 void shellhelp();
 void serverack();
+
+int sessionid = UDPSH_SERVER_SES_INV;
+struct udpsh_sock sock_server;
 
 int main()
 {
