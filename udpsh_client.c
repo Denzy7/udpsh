@@ -3,6 +3,8 @@
 
 /* inet_ntoa */
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <ws2tcpip.h>
 #else
 #include <arpa/inet.h>
@@ -27,9 +29,29 @@ int main()
 {
     // we want half the size to avoid snprintf truncation warnings
     char inputbuf[UDPSH_SOCK_BUFSZ / 2];
-    int running = 1;
+    int running = 1, status;
     size_t inputbuf_strlen, i;
     const char* conaddr;
+#ifdef _WIN32
+   WORD wsa_ver;
+   WSADATA wsa_data;
+#endif
+
+#ifdef _WIN32
+   wsa_ver = MAKEWORD(2, 2);
+   if((status = WSAStartup(wsa_ver, &wsa_data)) != 0)
+   {
+       fprintf(stderr, "WSAStartup failed: err=%d\n", WSAGetLastError());
+       return 1;
+   }
+
+   if(HIBYTE(wsa_data.wVersion) != 2 || LOBYTE(wsa_data.wVersion) != 2)
+   {
+       fprintf(stderr, "WinSock2 unavailable: err=%d\n", WSAGetLastError());
+       WSACleanup();
+       return 1;
+   }
+#endif
 
     memset(&sock_server, 0, sizeof(sock_server));
 
@@ -132,6 +154,9 @@ int main()
             }
         }
     }
+#ifdef _WIN32
+    WSACleanup();
+#endif
     printf("\nHAVE A NICE DAY!\n\n");
 
     return 0;
