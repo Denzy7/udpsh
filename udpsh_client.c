@@ -6,6 +6,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <ws2tcpip.h>
+#define snprintf sprintf_s
 #else
 #include <arpa/inet.h>
 #endif
