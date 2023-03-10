@@ -1,6 +1,12 @@
 #include <stdio.h>
 #include <string.h>
-#include <arpa/inet.h> /* inet_ntoa */
+
+/* inet_ntoa */
+#ifdef _WIN32
+#include <ws2tcpip.h>
+#else
+#include <arpa/inet.h>
+#endif
 
 #include "udpsh_sock.h"
 #include "udpsh_server.h"

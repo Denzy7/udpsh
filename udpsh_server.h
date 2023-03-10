@@ -1,6 +1,8 @@
 #ifndef SERVER_H
 #define SERVER_H
+#ifndef _WIN32
 #include <pthread.h>
+#endif
 #include "udpsh_sock.h"
 
 /* server functions */
@@ -17,9 +19,11 @@
 
 struct udpsh_server_session
 {
+#ifndef _WIN32
     pthread_t thread;
     pthread_cond_t cond;
     pthread_mutex_t mut;
+#endif
     int id;
     struct udpsh_sock sock;
     struct udpsh_sock global_sock;
