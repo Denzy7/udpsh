@@ -75,7 +75,7 @@ int udpsh_sock_bind(const struct udpsh_sock* udpsh_sock)
 
 int udpsh_sock_recv(struct udpsh_sock* to, struct sockaddr_in* srcinfo, socklen_t* srcaddrlen)
 {
-    if(recvfrom(to->sock, to->buffer, UDPSH_SOCK_BUFSZ, MSG_WAITALL,
+    if(recvfrom(to->sock, to->buffer, UDPSH_SOCK_BUFSZ, 0,
              (struct sockaddr*)srcinfo, srcinfo == NULL ? NULL : srcaddrlen) == -1)
     {
         perror("udpsh_sock_recv failed");
@@ -86,7 +86,7 @@ int udpsh_sock_recv(struct udpsh_sock* to, struct sockaddr_in* srcinfo, socklen_
 
 int udpsh_sock_send(const struct udpsh_sock* to)
 {
-    if(sendto(to->sock, to->buffer, UDPSH_SOCK_BUFSZ, MSG_OOB,
+    if(sendto(to->sock, to->buffer, UDPSH_SOCK_BUFSZ, 0,
            (const struct sockaddr*)&to->addr, sizeof(struct sockaddr_in)) == -1)
     {
         perror("udpsh_sock_send failed");
