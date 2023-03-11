@@ -7,10 +7,22 @@
 #include <time.h> /* time(NULL) */
 #include <errno.h> /* errno */
 #include <signal.h> /* signal */
+#include <pthread.h>
 
 #include "udpsh_sock.h"
 #include "udpsh_server.h"
 #include "udpsh_util.h"
+
+struct udpsh_server_session
+{
+    pthread_t thread;
+    pthread_cond_t cond;
+    pthread_mutex_t mut;
+    int id;
+    struct udpsh_sock sock;
+    struct udpsh_sock global_sock;
+    char cmdbuf[UDPSH_SOCK_BUFSZ / 2];
+};
 
 struct udpsh_sock sock_server;
 struct udpsh_server_session sessions[4];
