@@ -86,7 +86,14 @@ int udpsh_sock_recv(struct udpsh_sock* to, struct sockaddr_in* srcinfo, socklen_
 
 int udpsh_sock_send(const struct udpsh_sock* to)
 {
-    if(sendto(to->sock, to->buffer, UDPSH_SOCK_BUFSZ, 0,
+    size_t len = UDPSH_SOCK_BUFSZ, strln;
+    strln = strlen(to->buffer);
+
+    /* send string length + \0 */
+    if(strln < len && strln > 0)
+        len = strln + 1;
+
+    if(sendto(to->sock, to->buffer, len, 0,
            (const struct sockaddr*)&to->addr, sizeof(struct sockaddr_in)) == -1)
     {
         perror("udpsh_sock_send failed");
