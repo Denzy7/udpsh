@@ -27,6 +27,7 @@ struct udpsh_server_session
 struct udpsh_sock sock_server;
 struct udpsh_server_session sessions[4];
 int pktloss = 0;
+int usessl = 0;
 
 /* session thread function */
 void* session(void* arg);
@@ -49,11 +50,36 @@ int addrcmp(struct in_addr* a, struct in_addr* b);
 /* signal that causes program to exit */
 void sigexits(int sig);
 int running = 1;
+
+void serverhelp()
+{
+    printf("udpsh_server help\n"
+           "-pktloss PACKET_LOSS\n"
+           "-sslcert CERT: use with -sslkey\n"
+           "-sslkey KEY: use with -sslcert\n"
+           "\n");
+}
+
 int main(int argc, char *argv[])
 {
-    if(argv[1] != NULL)
+    const char *cert = NULL, *key = NULL;
+    serverhelp();
+
+    for(int i = 0; i < argc; i++)
     {
-        sscanf(argv[1], "%d", &pktloss);
+        if(strstr(argv[i], "-pktloss"))
+        {
+            sscanf(argv[i + 1], "%d", &pktloss);
+            printf("set pktloss = %d\n", pktloss);
+        }else if(strstr(argv[i], "-sslcert"))
+        {
+            cert = argv[i + 1];
+            printf("set sslcert = %s\n", cert);
+        }else if(strstr(argv[i], "-sslkey"))
+        {
+            key = argv[i + 1];
+            printf("set sslkey = %s\n", key);
+        }
     }
 
     signal(SIGINT, sigexits);
@@ -68,9 +94,22 @@ int main(int argc, char *argv[])
     if(udpsh_sock_bind(&sock_server) != 0)
         return 1;
 
+    if(cert && key)
+    {
+        if(udpsh_sock_ssl_server(&sock_server,
+                                  cert,
+                                  key) == 1)
+        {
+            fprintf(stderr, "ssl init failed\n");
+            return 0;
+        }
+        usessl = 1;
+    }
+
+
     while(running)
     {
-//        printf("waiting for global msg\n");
+        printf("waiting for global msg\n");
         struct udpsh_sock sock_global_client;
         memset(&sock_global_client, 0, sizeof(sock_global_client));
         sock_global_client.addrlen = sizeof(struct sockaddr_in);
@@ -78,9 +117,26 @@ int main(int argc, char *argv[])
         udpsh_sock_recv(&sock_server, &sock_global_client.addr, &sock_global_client.addrlen);
         clientack(&sock_global_client);
 
-//        printf("from %s\nbuffer=%s\n",
-//               inet_ntoa(sock_global_client.addr.sin_addr),
-//               sock_server.buffer);
+        printf("from %s\nbuffer=%s\n",
+               inet_ntoa(sock_global_client.addr.sin_addr),
+               sock_server.buffer);
+
+        int ssl_session = 0;
+        if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_SSL, strlen(UDPSH_SERVER_FUN_SSL)) == 0)
+        {
+            snprintf(sock_global_client.buffer, UDPSH_SOCK_BUFSZ,
+                     "%d", usessl);
+            udpsh_sock_send(&sock_global_client);
+            if(usessl)
+            {
+                udpsh_sock_ssl_accept(&sock_server, &sock_global_client.addr, sock_global_client.addrlen);
+                printf("accept ssl from %s\n", inet_ntoa(sock_global_client.addr.sin_addr));
+                udpsh_sock_ssl_read(&sock_server);
+                ssl_session = 1;
+                printf("sslread: %s\n", sock_server.buffer);
+                sock_global_client.ssl = sock_server.ssl;
+            }
+        }
 
         /* nasty inextensible code here! */
         int parse_sessionid = 0;
@@ -104,7 +160,6 @@ int main(int argc, char *argv[])
         }
 
         struct udpsh_server_session* session_global = &sessions[parse_sessionid - 1];
-
         if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_CON, strlen(UDPSH_SERVER_FUN_CON)) == 0)
         {
             int sessionid = UDPSH_SERVER_SES_INV;
@@ -163,8 +218,10 @@ int main(int argc, char *argv[])
 //            memset(session_global, 0, sizeof(struct udpsh_server_session));
         }else if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_EXE, strlen(UDPSH_SERVER_FUN_EXE)) == 0)
         {
+
             if(session_global->id == UDPSH_SERVER_SES_INV)
             {
+                printf("inv\n");
                 snprintf(sock_global_client.buffer, UDPSH_SOCK_BUFSZ,
                          "invalid session. try reconnecting");
                 udpsh_sock_send(&sock_global_client);
@@ -177,6 +234,9 @@ int main(int argc, char *argv[])
             memcpy(&session_global->cmdbuf,
                     parse_cmdbuf,
                     sizeof(session_global->cmdbuf));
+
+            /* set ssl sess */
+            session_global->global_sock.ssl_enabled = ssl_session;
 
             seswake(session_global);
             /* test kill session */
@@ -204,6 +264,7 @@ void* session(void* arg)
     struct udpsh_server_session* session_client = arg;
     pthread_mutex_init(&session_client->mut, NULL);
     pthread_cond_init(&session_client->cond, NULL);
+
     while(session_client->id != UDPSH_SERVER_SES_INV)
     {
 //        printf("waiting for msg raise client %d\n", session_client->id);
@@ -313,8 +374,12 @@ void* session(void* arg)
             }
         }
 
-        if(session_client->id != UDPSH_SERVER_SES_INV)
-            udpsh_sock_send(&session_client->global_sock);
+        if(session_client->id != UDPSH_SERVER_SES_INV){
+            if(session_client->global_sock.ssl_enabled)
+                udpsh_sock_ssl_write(&session_client->global_sock);
+            else
+                udpsh_sock_send(&session_client->global_sock);
+        }
 
         pthread_mutex_unlock(&session_client->mut);
     }
