@@ -15,6 +15,7 @@
 #include "udpsh_server.h"
 
 #define STR_CON ".connect"
+#define STR_SSL ".ssl"
 #define STR_QUIT ".quit"
 #define STR_HELP ".help"
 #define STR_DISCON ".disconnect"
@@ -25,6 +26,8 @@ void serverack();
 
 int sessionid = UDPSH_SERVER_SES_INV;
 struct udpsh_sock sock_server;
+int sock_server_ssl;
+int usessl = 0;
 
 int main()
 {
@@ -55,7 +58,6 @@ int main()
 #endif
 
     memset(&sock_server, 0, sizeof(sock_server));
-
     printf("welcome to udpsh! type " STR_HELP " for help\n");
     while(running)
     {
@@ -131,6 +133,24 @@ int main()
                 printf("connected to %s using sessionid %d!\n",
                        inet_ntoa(sock_server.addr.sin_addr), sessionid);
             }
+        }else if(strncmp(inputbuf,STR_SSL, strlen(STR_SSL)) == 0)
+        {
+            if(strlen(inputbuf) == strlen(STR_SSL))
+            {
+                usessl = !usessl;
+            }else
+            {
+                const char* cert = inputbuf + strlen(STR_SSL) + 1;
+                if(udpsh_sock_ssl_client(&sock_server, cert) == 1)
+                {
+                    fprintf(stderr, "ssl init failed\n");
+                }else
+                {
+                    printf("loaded %s successfully\n", cert);
+                    usessl = 1;
+                }
+            }
+            printf("usessl=%d\n", usessl);
         }else
         {
             if(sessionid == UDPSH_SERVER_SES_INV)
@@ -138,18 +158,49 @@ int main()
                 printf("unknown udpsh command. type " STR_HELP " for help\n");
             }else
             {
+                if(usessl)
+                {
+                    /* ssl negotitaion */
+                    snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
+                            "%s",
+                            UDPSH_SERVER_FUN_SSL);
+                    udpsh_sock_send(&sock_server);
+                    serverack();
+
+                    /* server's ssl status */
+                    udpsh_sock_recv(&sock_server, NULL, NULL);
+                    sscanf(sock_server.buffer, "%d", &sock_server_ssl);
+                    if(sock_server_ssl == 0)
+                    {
+                        printf("server does not support ssl. consider disabling it (insecure)\n");
+                    }else
+                    {
+                        udpsh_sock_ssl_connect(&sock_server);
+                    }
+                }
+
                 snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
                          "%s%s%d%s%s",
                          UDPSH_SERVER_FUN_EXE, UDPSH_SERVER_TOK,
                          sessionid, UDPSH_SERVER_TOK,
                          inputbuf);
-                udpsh_sock_send(&sock_server);
-                serverack();
+                if(usessl && sock_server_ssl){
+                    udpsh_sock_ssl_write(&sock_server);
+                }
+                else{
+                    udpsh_sock_send(&sock_server);
+                    serverack();
+                }
 
                 /* server should reply with command output */
                 printf("waiting for output from server... ");
                 fflush(stdout);
-                udpsh_sock_recv(&sock_server, NULL, NULL);
+                if(usessl && sock_server_ssl){
+                    udpsh_sock_ssl_read(&sock_server);
+                }
+                else{
+                    udpsh_sock_recv(&sock_server, NULL, NULL);
+                }
                 printf("done\n");
                 printf("\n%s", sock_server.buffer);
             }
@@ -177,6 +228,7 @@ void serverack()
 void shellhelp()
 {
     printf(STR_CON" [ipv4-address]: connect to server\n"
+           STR_SSL" [cert]: toggle ssl if no cert is provided. off by default\n"
            STR_DISCON": disconnect current server\n"
            STR_HELP": this message\n"
            STR_QUIT": you would not beleive it!\n");
