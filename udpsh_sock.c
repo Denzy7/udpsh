@@ -30,6 +30,7 @@ struct udpsh_sock_ssl
 
 #include <stdio.h>
 #include <string.h>
+
 int udpsh_sock_make(const char* ipv4dest, struct udpsh_sock* udpsh_sock)
 {
     struct addrinfo hints, *res;
@@ -88,52 +89,65 @@ int _udpsh_sock_ssl_setup(struct udpsh_sock_ssl* ssl, const int isserver)
     return 0;
 }
 
-int udpsh_sock_ssl_server(struct udpsh_sock* udpsh_sock, const char* certfile, const char* keyfile)
+int udpsh_sock_ssl_init(struct udpsh_sock* udpsh_sock, int isserver)
 {
     struct udpsh_sock_ssl ssl;
     memset(&ssl, 0, sizeof(ssl));
-    if(_udpsh_sock_ssl_setup(&ssl, 1) != 0)
+    if(_udpsh_sock_ssl_setup(&ssl, isserver) != 0)
     {
         return 1;
     }
-
-    if(SSL_use_certificate_chain_file(ssl.hnd, certfile) <= 0)
-    {
-        ERR_print_errors_fp(stderr);
-        return 1;
-    }
-
-    if(SSL_use_PrivateKey_file(ssl.hnd, keyfile, SSL_FILETYPE_PEM) <= 0)
-    {
-        ERR_print_errors_fp(stderr);
-        return 1;
-    }
-
     udpsh_sock->ssl = malloc(sizeof(struct udpsh_sock_ssl));
     memcpy(udpsh_sock->ssl, &ssl, sizeof(struct udpsh_sock_ssl));
 
     return 0;
 }
-int udpsh_sock_ssl_client(struct udpsh_sock* udpsh_sock, const char* certfile)
+
+void udpsh_sock_ssl_terminate(struct udpsh_sock* udpsh_sock)
 {
-    struct udpsh_sock_ssl ssl;
-    memset(&ssl, 0, sizeof(ssl));
-    if(_udpsh_sock_ssl_setup(&ssl, 0) != 0)
+    SSL_shutdown(udpsh_sock->ssl->hnd);
+    SSL_free(udpsh_sock->ssl->hnd);
+    SSL_CTX_free(udpsh_sock->ssl->ctx);
+}
+
+int udpsh_sock_ssl_server(struct udpsh_sock* udpsh_sock, const char* certfile, const char* keyfile)
+{
+    if(udpsh_sock->ssl == NULL)
     {
+        printf("udpsh_sock_ssl_init had not succeeded\n");
         return 1;
     }
 
-    /* need cert */
-    SSL_CTX_set_verify(ssl.ctx, SSL_VERIFY_PEER, NULL);
-
-    if(SSL_CTX_load_verify_locations(ssl.ctx, certfile, NULL) == 0)
+    if(SSL_use_certificate_chain_file(udpsh_sock->ssl->hnd, certfile) <= 0)
     {
         ERR_print_errors_fp(stderr);
         return 1;
     }
 
-    udpsh_sock->ssl = malloc(sizeof(struct udpsh_sock_ssl));
-    memcpy(udpsh_sock->ssl, &ssl, sizeof(struct udpsh_sock_ssl));
+    if(SSL_use_PrivateKey_file(udpsh_sock->ssl->hnd, keyfile, SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        return 1;
+    }
+
+    return 0;
+}
+int udpsh_sock_ssl_client(struct udpsh_sock* udpsh_sock, const char* certfile)
+{
+    if(udpsh_sock->ssl == NULL)
+    {
+        printf("udpsh_sock_ssl_init had not succeeded\n");
+        return 1;
+    }
+
+    /* need cert */
+    SSL_CTX_set_verify(udpsh_sock->ssl->ctx, SSL_VERIFY_PEER, NULL);
+
+    if(SSL_CTX_load_verify_locations(udpsh_sock->ssl->ctx, certfile, NULL) == 0)
+    {
+        ERR_print_errors_fp(stderr);
+        return 1;
+    }
 
     return 0;
 }

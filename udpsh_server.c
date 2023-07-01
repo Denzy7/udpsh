@@ -96,7 +96,8 @@ int main(int argc, char *argv[])
 
     if(cert && key)
     {
-        if(udpsh_sock_ssl_server(&sock_server,
+        if(udpsh_sock_ssl_init(&sock_server, 1) == 1 ||
+            udpsh_sock_ssl_server(&sock_server,
                                   cert,
                                   key) == 1)
         {
@@ -244,6 +245,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    udpsh_sock_ssl_terminate(&sock_server);
     return 0;
 }
 

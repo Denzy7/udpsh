@@ -58,6 +58,11 @@ int main()
 #endif
 
     memset(&sock_server, 0, sizeof(sock_server));
+    if(udpsh_sock_ssl_init(&sock_server, 0) == 1)
+    {
+       fprintf(stderr, "failed to init ssl\n");
+       return 1;
+    }
     printf("welcome to udpsh! type " STR_HELP " for help\n");
     while(running)
     {
@@ -209,6 +214,7 @@ int main()
 #ifdef _WIN32
     WSACleanup();
 #endif
+    udpsh_sock_ssl_terminate(&sock_server);
     printf("\nHAVE A NICE DAY!\n\n");
 
     return 0;

@@ -31,6 +31,10 @@ struct udpsh_sock
 };
 
 int udpsh_sock_make(const char* ipv4dest, struct udpsh_sock* udpsh_sock);
+
+int udpsh_sock_ssl_init(struct udpsh_sock* udpsh_sock, int isserver);
+void udpsh_sock_ssl_terminate(struct udpsh_sock* udpsh_sock);
+
 int udpsh_sock_ssl_server(struct udpsh_sock* udpsh_sock, const char* certfile, const char* keyfile);
 int udpsh_sock_ssl_accept(struct udpsh_sock* udpsh_sock, const struct sockaddr_in* addr, socklen_t addrlen);
 
