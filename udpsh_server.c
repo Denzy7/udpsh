@@ -191,7 +191,13 @@ int main(int argc, char *argv[])
 
             snprintf(sock_global_client.buffer, UDPSH_SOCK_BUFSZ,
                      "%d", sessionid);
-            udpsh_sock_send(&sock_global_client);
+            if(ssl_session && usessl)
+            {
+                udpsh_sock_ssl_write(&sock_global_client);
+            }else
+            {
+                udpsh_sock_send(&sock_global_client);
+            }
 
             if(sessionid == UDPSH_SERVER_SES_INV)
             {

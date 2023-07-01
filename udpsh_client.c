@@ -29,6 +29,26 @@ struct udpsh_sock sock_server;
 int sock_server_ssl;
 int usessl = 0;
 
+void ssl_negotiation()
+{
+    snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
+             "%s",
+             UDPSH_SERVER_FUN_SSL);
+    udpsh_sock_send(&sock_server);
+    serverack();
+
+    /* server's ssl status */
+    udpsh_sock_recv(&sock_server, NULL, NULL);
+    sscanf(sock_server.buffer, "%d", &sock_server_ssl);
+    if(sock_server_ssl == 0)
+    {
+        printf("server does not support ssl. consider disabling it (insecure)\n");
+    }else
+    {
+        udpsh_sock_ssl_connect(&sock_server);
+    }
+}
+
 int main()
 {
     // we want half the size to avoid snprintf truncation warnings
@@ -36,6 +56,7 @@ int main()
     int running = 1;
     size_t inputbuf_strlen, i;
     const char* conaddr;
+    const char* constr = "INSECURELY connected to %s using sessionid %d!\n";
 #ifdef _WIN32
    WORD wsa_ver;
    WSADATA wsa_data;
@@ -119,14 +140,27 @@ int main()
                 printf("cannot create socket to server at %s\n", conaddr);
                 continue;
             }
+            if(usessl)
+            {
+                ssl_negotiation();
+            }
+
             snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
                 "%s", UDPSH_SERVER_FUN_CON);
-            udpsh_sock_send(&sock_server);
-            serverack();
+            if(usessl && sock_server_ssl){
+                udpsh_sock_ssl_write(&sock_server);
+            }else{
+                udpsh_sock_send(&sock_server);
+                serverack();
+            }
             printf("waiting for server to reply with sessionid... ");
             fflush(stdout);
             /* server should reply with our sessionid here */
-            udpsh_sock_recv(&sock_server, NULL, NULL);
+            if(usessl && sock_server_ssl)
+                udpsh_sock_ssl_read(&sock_server);
+            else
+                udpsh_sock_recv(&sock_server, NULL, NULL);
+
             sscanf(sock_server.buffer, "%d", &sessionid);
             if(sessionid == UDPSH_SERVER_SES_INV)
             {
@@ -135,8 +169,9 @@ int main()
                        sock_server.buffer);
             }else
             {
-                printf("connected to %s using sessionid %d!\n",
-                       inet_ntoa(sock_server.addr.sin_addr), sessionid);
+                if(usessl && sock_server_ssl)
+                    constr = "securely connected to %s using sessionid %d!\n";
+                printf(constr, inet_ntoa(sock_server.addr.sin_addr), sessionid);
             }
         }else if(strncmp(inputbuf,STR_SSL, strlen(STR_SSL)) == 0)
         {
@@ -165,23 +200,7 @@ int main()
             {
                 if(usessl)
                 {
-                    /* ssl negotitaion */
-                    snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
-                            "%s",
-                            UDPSH_SERVER_FUN_SSL);
-                    udpsh_sock_send(&sock_server);
-                    serverack();
-
-                    /* server's ssl status */
-                    udpsh_sock_recv(&sock_server, NULL, NULL);
-                    sscanf(sock_server.buffer, "%d", &sock_server_ssl);
-                    if(sock_server_ssl == 0)
-                    {
-                        printf("server does not support ssl. consider disabling it (insecure)\n");
-                    }else
-                    {
-                        udpsh_sock_ssl_connect(&sock_server);
-                    }
+                    ssl_negotiation();
                 }
 
                 snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
@@ -234,7 +253,7 @@ void serverack()
 
 void shellhelp()
 {
-    printf(STR_CON" [ipv4-address]: connect to server\n"
+    printf(STR_CON" [ipv4-address | hostname]: connect to server\n"
            STR_SSL" [cert]: toggle ssl if no cert is provided. off by default\n"
            STR_DISCON": disconnect current server\n"
            STR_HELP": this message\n"
