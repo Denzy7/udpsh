@@ -6,6 +6,7 @@ add_library(udpsh-sock STATIC udpsh_sock.h  udpsh_sock.c)
 if(WIN32)
     target_link_libraries(udpsh-sock ws2_32)
 endif()
+target_link_libraries(udpsh-sock ssl crypto)
 add_executable(udpsh-client udpsh_client.c)
 target_link_libraries(udpsh-client udpsh-sock)
 

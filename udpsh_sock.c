@@ -1,4 +1,13 @@
 #include "udpsh_sock.h"
+#include <errno.h>
+#include <netinet/in.h>
+#include <stdlib.h>
+
+#define USESSL
+#ifdef USESSL
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#endif
 
 #ifndef _WIN32
 #include <sys/socket.h> /* socket */
@@ -12,6 +21,12 @@
 #else
 #define closesock(sock) close(sock)
 #endif
+
+struct udpsh_sock_ssl
+{
+    SSL* hnd;
+    SSL_CTX* ctx;
+};
 
 #include <stdio.h>
 #include <string.h>
@@ -45,11 +60,130 @@ int udpsh_sock_make(const char* ipv4dest, struct udpsh_sock* udpsh_sock)
 
     udpsh_sock->addr.sin_family = AF_INET;
     udpsh_sock->addr.sin_port = htons(UDPSH_SOCK_PORT);
-
     /*printf("created socket at %s:%hu successfully\n",
            inet_ntoa(udpsh->addr.sin_addr),
            ntohs(udpsh->addr.sin_port));*/
 
+    return 0;
+}
+
+int _udpsh_sock_ssl_setup(struct udpsh_sock_ssl* ssl, const int isserver)
+{
+    const SSL_METHOD* method = DTLS_server_method();
+    if(!isserver)
+        method = DTLS_client_method();
+    ssl->ctx = SSL_CTX_new(method);
+    if(ssl->ctx == NULL)
+    {
+        ERR_print_errors_fp(stderr);
+        return 1;
+    }
+    ssl->hnd = SSL_new(ssl->ctx);
+    if(ssl->hnd == NULL)
+    {
+        ERR_print_errors_fp(stderr);
+        return 1;
+    }
+
+    return 0;
+}
+
+int udpsh_sock_ssl_server(struct udpsh_sock* udpsh_sock, const char* certfile, const char* keyfile)
+{
+    struct udpsh_sock_ssl ssl;
+    memset(&ssl, 0, sizeof(ssl));
+    if(_udpsh_sock_ssl_setup(&ssl, 1) != 0)
+    {
+        return 1;
+    }
+
+    if(SSL_use_certificate_chain_file(ssl.hnd, certfile) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        return 1;
+    }
+
+    if(SSL_use_PrivateKey_file(ssl.hnd, keyfile, SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        return 1;
+    }
+
+    udpsh_sock->ssl = malloc(sizeof(struct udpsh_sock_ssl));
+    memcpy(udpsh_sock->ssl, &ssl, sizeof(struct udpsh_sock_ssl));
+
+    return 0;
+}
+int udpsh_sock_ssl_client(struct udpsh_sock* udpsh_sock, const char* certfile)
+{
+    struct udpsh_sock_ssl ssl;
+    memset(&ssl, 0, sizeof(ssl));
+    if(_udpsh_sock_ssl_setup(&ssl, 0) != 0)
+    {
+        return 1;
+    }
+
+    /* need cert */
+    SSL_CTX_set_verify(ssl.ctx, SSL_VERIFY_PEER, NULL);
+
+    if(SSL_CTX_load_verify_locations(ssl.ctx, certfile, NULL) == 0)
+    {
+        ERR_print_errors_fp(stderr);
+        return 1;
+    }
+
+    udpsh_sock->ssl = malloc(sizeof(struct udpsh_sock_ssl));
+    memcpy(udpsh_sock->ssl, &ssl, sizeof(struct udpsh_sock_ssl));
+
+    return 0;
+}
+
+int udpsh_sock_ssl_connect(struct udpsh_sock* udpsh_sock)
+{
+    if(connect(udpsh_sock->sock, (const struct sockaddr*)&udpsh_sock->addr, sizeof(udpsh_sock->addr)) != 0)
+    {
+        perror("cannot connect to socket");
+        return 1;
+    }
+
+    if(SSL_set_fd(udpsh_sock->ssl->hnd, udpsh_sock->sock) == 0)
+    {
+        perror("cannot set ssl fd\n");
+        return 1;
+    }
+
+    int ret = SSL_connect(udpsh_sock->ssl->hnd);
+    if(ret <= 0)
+    {
+        fprintf(stderr, "ssl connect error: %d\n", SSL_get_error(udpsh_sock->ssl->hnd, ret));
+        ERR_print_errors_fp(stderr);
+        return 1;
+    }
+
+    return 0;
+}
+
+int udpsh_sock_ssl_accept(struct udpsh_sock* udpsh_sock, const struct sockaddr_in* addr, socklen_t addrlen)
+{
+    if(connect(udpsh_sock->sock, (const struct sockaddr*)addr, addrlen) != 0)
+    {
+        perror("cannot connect to socket");
+        return 1;
+    }
+
+    if(SSL_set_fd(udpsh_sock->ssl->hnd, udpsh_sock->sock) == 0)
+    {
+        perror("cannot set ssl fd\n");
+        return 1;
+    }
+
+    int ret = SSL_accept(udpsh_sock->ssl->hnd);
+    if(ret <= 0)
+    {
+        fprintf(stderr, "ssl accept error: %d\n", SSL_get_error(udpsh_sock->ssl->hnd, ret));
+        ERR_print_errors_fp(stderr);
+        return 1;
+    }
     return 0;
 }
 
@@ -60,7 +194,25 @@ int udpsh_sock_close(const struct udpsh_sock* udpsh_sock)
         perror("udpsh_sock_close failed");
         return 1;
     }
+
     return 0;
+}
+
+int udpsh_sock_ssl_read(struct udpsh_sock* udpsh_sock)
+{
+    return SSL_read(udpsh_sock->ssl->hnd, udpsh_sock->buffer, UDPSH_SOCK_BUFSZ);
+}
+
+int udpsh_sock_ssl_write(struct udpsh_sock* udpsh_sock)
+{
+    size_t len = UDPSH_SOCK_BUFSZ, strln;
+    strln = strlen(udpsh_sock->buffer);
+
+    /* send string length + \0 */
+    if(strln < len && strln > 0)
+        len = strln + 1;
+
+    return SSL_write(udpsh_sock->ssl->hnd, udpsh_sock->buffer, len);
 }
 
 int udpsh_sock_bind(const struct udpsh_sock* udpsh_sock)
@@ -70,6 +222,7 @@ int udpsh_sock_bind(const struct udpsh_sock* udpsh_sock)
         perror("cannot bind socket to address");
         return 1;
     }
+
     return 0;
 }
 

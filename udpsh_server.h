@@ -4,6 +4,7 @@
 /* server functions */
 #define UDPSH_SERVER_FUN_ACK "ack"
 #define UDPSH_SERVER_FUN_CON "con"
+#define UDPSH_SERVER_FUN_SSL "ssl"
 #define UDPSH_SERVER_FUN_EXE "exe"
 #define UDPSH_SERVER_FUN_DIS "dis"
 
