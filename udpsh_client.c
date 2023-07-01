@@ -193,6 +193,7 @@ int main()
                     udpsh_sock_ssl_write(&sock_server);
                 }
                 else{
+                    printf("not using ssl (insecure)\n");
                     udpsh_sock_send(&sock_server);
                     serverack();
                 }
