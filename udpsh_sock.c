@@ -1,10 +1,7 @@
 #include "udpsh_sock.h"
-#include <errno.h>
-#include <netinet/in.h>
-#include <stdlib.h>
 
-#define USESSL
-#ifdef USESSL
+#include "udpsh_config.h"
+#ifdef USE_SSL
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #endif
@@ -24,11 +21,15 @@
 
 struct udpsh_sock_ssl
 {
+    #ifdef USE_SSL
     SSL* hnd;
     SSL_CTX* ctx;
+    #endif
 };
 
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int udpsh_sock_make(const char* ipv4dest, struct udpsh_sock* udpsh_sock)
@@ -70,6 +71,7 @@ int udpsh_sock_make(const char* ipv4dest, struct udpsh_sock* udpsh_sock)
 
 int _udpsh_sock_ssl_setup(struct udpsh_sock_ssl* ssl, const int isserver)
 {
+#ifdef USE_SSL
     const SSL_METHOD* method = DTLS_server_method();
     if(!isserver)
         method = DTLS_client_method();
@@ -85,12 +87,14 @@ int _udpsh_sock_ssl_setup(struct udpsh_sock_ssl* ssl, const int isserver)
         ERR_print_errors_fp(stderr);
         return 1;
     }
+#endif
 
     return 0;
 }
 
 int udpsh_sock_ssl_init(struct udpsh_sock* udpsh_sock, int isserver)
 {
+#ifdef USE_SSL
     struct udpsh_sock_ssl ssl;
     memset(&ssl, 0, sizeof(ssl));
     if(_udpsh_sock_ssl_setup(&ssl, isserver) != 0)
@@ -101,13 +105,20 @@ int udpsh_sock_ssl_init(struct udpsh_sock* udpsh_sock, int isserver)
     memcpy(udpsh_sock->ssl, &ssl, sizeof(struct udpsh_sock_ssl));
 
     return 0;
+#else
+    printf("recompile with -DUSE_SSL to enable ssl\n");
+    return 1;
+#endif
 }
 
 void udpsh_sock_ssl_terminate(struct udpsh_sock* udpsh_sock)
 {
+    #ifdef USE_SSL
     SSL_shutdown(udpsh_sock->ssl->hnd);
     SSL_free(udpsh_sock->ssl->hnd);
     SSL_CTX_free(udpsh_sock->ssl->ctx);
+    free(udpsh_sock->ssl);
+    #endif
 }
 
 int udpsh_sock_ssl_server(struct udpsh_sock* udpsh_sock, const char* certfile, const char* keyfile)
@@ -117,7 +128,7 @@ int udpsh_sock_ssl_server(struct udpsh_sock* udpsh_sock, const char* certfile, c
         printf("udpsh_sock_ssl_init had not succeeded\n");
         return 1;
     }
-
+#ifdef USE_SSL
     if(SSL_use_certificate_chain_file(udpsh_sock->ssl->hnd, certfile) <= 0)
     {
         ERR_print_errors_fp(stderr);
@@ -129,8 +140,9 @@ int udpsh_sock_ssl_server(struct udpsh_sock* udpsh_sock, const char* certfile, c
         ERR_print_errors_fp(stderr);
         return 1;
     }
-
+#endif
     return 0;
+
 }
 int udpsh_sock_ssl_client(struct udpsh_sock* udpsh_sock, const char* certfile)
 {
@@ -140,6 +152,7 @@ int udpsh_sock_ssl_client(struct udpsh_sock* udpsh_sock, const char* certfile)
         return 1;
     }
 
+#ifdef USE_SSL
     /* need cert */
     SSL_CTX_set_verify(udpsh_sock->ssl->ctx, SSL_VERIFY_PEER, NULL);
 
@@ -148,12 +161,14 @@ int udpsh_sock_ssl_client(struct udpsh_sock* udpsh_sock, const char* certfile)
         ERR_print_errors_fp(stderr);
         return 1;
     }
-
+#endif
     return 0;
+
 }
 
 int udpsh_sock_ssl_connect(struct udpsh_sock* udpsh_sock)
 {
+#ifdef USE_SSL
     if(connect(udpsh_sock->sock, (const struct sockaddr*)&udpsh_sock->addr, sizeof(udpsh_sock->addr)) != 0)
     {
         perror("cannot connect to socket");
@@ -173,12 +188,14 @@ int udpsh_sock_ssl_connect(struct udpsh_sock* udpsh_sock)
         ERR_print_errors_fp(stderr);
         return 1;
     }
-
+#endif
     return 0;
+
 }
 
 int udpsh_sock_ssl_accept(struct udpsh_sock* udpsh_sock, const struct sockaddr_in* addr, socklen_t addrlen)
 {
+#ifdef USE_SSL
     if(connect(udpsh_sock->sock, (const struct sockaddr*)addr, addrlen) != 0)
     {
         perror("cannot connect to socket");
@@ -198,7 +215,9 @@ int udpsh_sock_ssl_accept(struct udpsh_sock* udpsh_sock, const struct sockaddr_i
         ERR_print_errors_fp(stderr);
         return 1;
     }
+    #endif
     return 0;
+
 }
 
 int udpsh_sock_close(const struct udpsh_sock* udpsh_sock)
@@ -214,11 +233,17 @@ int udpsh_sock_close(const struct udpsh_sock* udpsh_sock)
 
 int udpsh_sock_ssl_read(struct udpsh_sock* udpsh_sock)
 {
-    return SSL_read(udpsh_sock->ssl->hnd, udpsh_sock->buffer, UDPSH_SOCK_BUFSZ);
+    int ret = 0;
+#ifdef USE_SSL
+    ret = SSL_read(udpsh_sock->ssl->hnd, udpsh_sock->buffer, UDPSH_SOCK_BUFSZ);
+#endif
+    return ret;
 }
 
 int udpsh_sock_ssl_write(struct udpsh_sock* udpsh_sock)
 {
+    int ret = 0;
+#ifdef USE_SSL
     size_t len = UDPSH_SOCK_BUFSZ, strln;
     strln = strlen(udpsh_sock->buffer);
 
@@ -226,7 +251,9 @@ int udpsh_sock_ssl_write(struct udpsh_sock* udpsh_sock)
     if(strln < len && strln > 0)
         len = strln + 1;
 
-    return SSL_write(udpsh_sock->ssl->hnd, udpsh_sock->buffer, len);
+    ret = SSL_write(udpsh_sock->ssl->hnd, udpsh_sock->buffer, len);
+#endif
+    return ret;
 }
 
 int udpsh_sock_bind(const struct udpsh_sock* udpsh_sock)

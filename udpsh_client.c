@@ -82,7 +82,6 @@ int main()
     if(udpsh_sock_ssl_init(&sock_server, 0) == 1)
     {
        fprintf(stderr, "failed to init ssl\n");
-       return 1;
     }
     printf("welcome to udpsh! type " STR_HELP " for help\n");
     while(running)

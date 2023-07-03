@@ -11,7 +11,6 @@
 
 #include <stddef.h> /* NULL, size */
 #define UDPSH_SOCK_PORT 0x3333
-#define UDPSH_SOCK_PORT_S UDPSH_SOCK_PORT + 1
 #define UDPSH_SOCK_BUFSZ 1024
 
 struct udpsh_sock_ssl;

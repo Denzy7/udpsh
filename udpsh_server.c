@@ -102,9 +102,9 @@ int main(int argc, char *argv[])
                                   key) == 1)
         {
             fprintf(stderr, "ssl init failed\n");
-            return 0;
+        }else{
+            usessl = 1;
         }
-        usessl = 1;
     }
 
 
