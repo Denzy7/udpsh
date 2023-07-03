@@ -1,0 +1,4 @@
+#ifndef UDPSH_CONFIG_H_IN
+#define UDPSH_CONFIG_H_IN
+#cmakedefine USE_SSL
+#endif // UDPSH_CONFIG_H_IN
