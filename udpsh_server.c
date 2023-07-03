@@ -49,7 +49,6 @@ int addrcmp(struct in_addr* a, struct in_addr* b);
 
 /* signal that causes program to exit */
 void sigexits(int sig);
-int running = 1;
 
 void serverhelp()
 {
@@ -107,8 +106,7 @@ int main(int argc, char *argv[])
         }
     }
 
-
-    while(running)
+    while(1)
     {
         printf("waiting for global msg\n");
         struct udpsh_sock sock_global_client;
@@ -167,7 +165,7 @@ int main(int argc, char *argv[])
             static const char* invsesserr = "server is at capacity, go away!";
             for(int i = 0; i < UDPSH_ARYSZ(sessions); i++)
             {
-                if(sessions[i].thread == 0)
+                if(sessions[i].id == UDPSH_SERVER_SES_INV)
                 {
                     sessionid = i + 1;
                     sessions[i].id = sessionid;
@@ -248,10 +246,28 @@ int main(int argc, char *argv[])
             seswake(session_global);
             /* test kill session */
             //sesinval(session_global);
+        }else if(strncmp(sock_server.buffer, UDPSH_SERVER_FUN_DIE, strlen(UDPSH_SERVER_FUN_DIE)) == 0)
+        {
+            //only server can die (SIGINT)
+            char addrstr[32];
+            snprintf(addrstr, sizeof(addrstr), "%s", inet_ntoa(sock_global_client.addr.sin_addr));
+            if(strncmp(addrstr,"127.0.0.1", 9) == 0)
+            {
+                break;
+            }else
+            {
+                printf("WARNING::%s IS TRYING TO KILL SERVER!\n", inet_ntoa(sock_global_client.addr.sin_addr));
+            }
         }
-    }
 
+    }
+    for(size_t i = 0; i < UDPSH_ARYSZ(sessions); i++)
+    {
+        if(sessions[i].id != UDPSH_SERVER_SES_INV)
+            sesinval(&sessions[i]);
+    }
     udpsh_sock_ssl_terminate(&sock_server);
+    printf("clean exit\n");
     return 0;
 }
 
@@ -414,7 +430,7 @@ void sesjoin(struct udpsh_server_session* ses)
 
 void sesinval(struct udpsh_server_session* ses)
 {
-    //    printf("invalidating session %d\n", ses->id);
+    printf("invalidating session %d\n", ses->id);
     ses->id = UDPSH_SERVER_SES_INV;
     seswake(ses);
     sesjoin(ses);
@@ -423,6 +439,7 @@ void sesinval(struct udpsh_server_session* ses)
 
 void sigexits(int sig)
 {
-    running = 0;
-    exit(sig + 128);
+    snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ,
+             "%s", UDPSH_SERVER_FUN_DIE);
+    udpsh_sock_send(&sock_server);
 }

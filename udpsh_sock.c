@@ -114,10 +114,13 @@ int udpsh_sock_ssl_init(struct udpsh_sock* udpsh_sock, int isserver)
 void udpsh_sock_ssl_terminate(struct udpsh_sock* udpsh_sock)
 {
     #ifdef USE_SSL
-    SSL_shutdown(udpsh_sock->ssl->hnd);
-    SSL_free(udpsh_sock->ssl->hnd);
-    SSL_CTX_free(udpsh_sock->ssl->ctx);
-    free(udpsh_sock->ssl);
+    if(udpsh_sock->ssl)
+    {
+        SSL_shutdown(udpsh_sock->ssl->hnd);
+        SSL_free(udpsh_sock->ssl->hnd);
+        SSL_CTX_free(udpsh_sock->ssl->ctx);
+        free(udpsh_sock->ssl);
+    }
     #endif
 }
 
