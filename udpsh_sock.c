@@ -290,7 +290,13 @@ int udpsh_sock_send(const struct udpsh_sock* to)
     if(strln < len && strln > 0)
         len = strln + 1;
 
-    if(sendto(to->sock, to->buffer, len, 0,
+    return udpsh_sock_send_buf(to, to->buffer, len);
+}
+
+
+int udpsh_sock_send_buf(const struct udpsh_sock* to, const void* buf, const size_t bufsz)
+{
+    if(sendto(to->sock, buf, bufsz, 0,
            (const struct sockaddr*)&to->addr, sizeof(struct sockaddr_in)) == -1)
     {
         perror("udpsh_sock_send failed");

@@ -47,5 +47,6 @@ int udpsh_sock_close(const struct udpsh_sock* udpsh_sock);
 int udpsh_sock_bind(const struct udpsh_sock* udpsh_sock);
 int udpsh_sock_recv(struct udpsh_sock* to, struct sockaddr_in* srcinfo, socklen_t* srcaddrlen);
 int udpsh_sock_send(const struct udpsh_sock* to);
+int udpsh_sock_send_buf(const struct udpsh_sock* to, const void* buf, const size_t bufsz);
 
 #endif /* UDPSH_SOCK_H */
