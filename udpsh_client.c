@@ -19,6 +19,7 @@
 #define STR_QUIT ".quit"
 #define STR_HELP ".help"
 #define STR_DISCON ".disconnect"
+#define STR_CRT ".cert"
 
 void disconn();
 void shellhelp();
@@ -190,6 +191,69 @@ int main()
                 }
             }
             printf("usessl=%d\n", usessl);
+        }else if(strncmp(inputbuf, STR_CRT, strlen(STR_CRT)) == 0)
+        {
+            conaddr = inputbuf + strlen(STR_CRT) + 1; /* +1 space */
+
+            if(udpsh_sock_make(conaddr, &sock_server) != 0)
+            {
+                printf("cannot create socket to server at %s\n", conaddr);
+                continue;
+            }
+
+            snprintf(sock_server.buffer, UDPSH_SOCK_BUFSZ, "%s", UDPSH_SERVER_FUN_CRT);
+            udpsh_sock_send(&sock_server);
+            serverack();
+
+            int certlen = 0;
+            FILE* tmpcrt_file;
+            static const char* tmpcrt = "tmpcrt.pem";
+            size_t consumed = 0;
+            size_t iters;
+
+            udpsh_sock_recv(&sock_server, NULL, NULL);
+            sscanf(sock_server.buffer, "%d", &certlen);
+            if(certlen == 0)
+            {
+                printf("server not using ssl!\n");
+            }else {
+                tmpcrt_file = fopen(tmpcrt, "wb");
+                if(tmpcrt_file == NULL)
+                {
+                    fprintf(stderr, "failed to open file %s: ", tmpcrt);
+                    continue;
+                }
+
+                consumed = 0;
+                iters = certlen / UDPSH_SOCK_BUFSZ;
+                if(iters == 0)
+                    iters++;
+
+                for(size_t i = 0; i < iters; i++)
+                {
+                    memset(sock_server.buffer, 0, UDPSH_SOCK_BUFSZ);
+                    consumed += udpsh_sock_recv(&sock_server, NULL, NULL);
+                    fwrite(sock_server.buffer, 1, consumed / (i + 1), tmpcrt_file);
+                }
+
+                if(consumed < certlen)
+                {
+                    memset(sock_server.buffer, 0, UDPSH_SOCK_BUFSZ);
+                    consumed = udpsh_sock_recv(&sock_server, NULL, NULL);
+                    fwrite(sock_server.buffer, 1, consumed, tmpcrt_file);
+                }
+                fclose(tmpcrt_file);
+
+                if(udpsh_sock_ssl_client(&sock_server, tmpcrt) == 0)
+                {
+                    printf("now using stored %s ssl cert in %s\n", conaddr, tmpcrt);
+                    usessl = 1;
+                }else {
+                    fprintf(stderr, "failed to init ssl!\n");
+                }
+            }
+
+            udpsh_sock_close(&sock_server);
         }else
         {
             if(sessionid == UDPSH_SERVER_SES_INV)
@@ -254,6 +318,7 @@ void shellhelp()
 {
     printf(STR_CON" [ipv4-address | hostname]: connect to server\n"
            STR_SSL" [cert]: toggle ssl if no cert is provided. off by default\n"
+           STR_CRT" [ipv4-address | hostname]: retreive ssl cert from server and use it\n"
            STR_DISCON": disconnect current server\n"
            STR_HELP": this message\n"
            STR_QUIT": you would not beleive it!\n");

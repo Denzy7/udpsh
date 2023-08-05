@@ -8,6 +8,7 @@
 #define UDPSH_SERVER_FUN_EXE "exe"
 #define UDPSH_SERVER_FUN_DIS "dis"
 #define UDPSH_SERVER_FUN_DIE "die"
+#define UDPSH_SERVER_FUN_CRT "crt"
 
 /* invalid session i.e. when not connected */
 #define UDPSH_SERVER_SES_INV 0

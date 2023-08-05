@@ -272,13 +272,15 @@ int udpsh_sock_bind(const struct udpsh_sock* udpsh_sock)
 
 int udpsh_sock_recv(struct udpsh_sock* to, struct sockaddr_in* srcinfo, socklen_t* srcaddrlen)
 {
-    if(recvfrom(to->sock, to->buffer, UDPSH_SOCK_BUFSZ, 0,
-             (struct sockaddr*)srcinfo, srcinfo == NULL ? NULL : srcaddrlen) == -1)
+    int recv = 0;
+    recv = recvfrom(to->sock, to->buffer, UDPSH_SOCK_BUFSZ, 0,
+             (struct sockaddr*)srcinfo, srcinfo == NULL ? NULL : srcaddrlen);
+    if(recv == -1)
     {
         perror("udpsh_sock_recv failed");
         return -1;
     }
-    return 0;
+    return recv;
 }
 
 int udpsh_sock_send(const struct udpsh_sock* to)
@@ -296,11 +298,13 @@ int udpsh_sock_send(const struct udpsh_sock* to)
 
 int udpsh_sock_send_buf(const struct udpsh_sock* to, const void* buf, const size_t bufsz)
 {
-    if(sendto(to->sock, buf, bufsz, 0,
-           (const struct sockaddr*)&to->addr, sizeof(struct sockaddr_in)) == -1)
+    int send = 0;
+    send = sendto(to->sock, buf, bufsz, 0,
+           (const struct sockaddr*)&to->addr, sizeof(struct sockaddr_in));
+    if(send == -1)
     {
         perror("udpsh_sock_send failed");
         return -1;
     }
-    return 0;
+    return send;
 }
